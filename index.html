@@ -202,5 +202,144 @@ document.addEventListener('click',e=>{if(!e.target.closest('#v4-shell'))queueMic
 init();
 })();
 </script>
+<style id="v5-navigation-style">
+/* V5 Navigation: make Calendar and Insights real pages, not footer add-ons */
+#v4-shell.v5-page{display:none;margin:0 0 24px;max-width:none;box-shadow:none}
+#v4-shell.v5-page.v5-open{display:block}
+#v4-shell .v5-section[hidden]{display:none!important}
+.v5-screenbar{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px;align-items:center}
+.v5-chip{border:1px solid #465269;background:#273347;color:#dce7f8;border-radius:10px;padding:10px 15px;font:600 13px Inter,system-ui,sans-serif;cursor:pointer}
+.v5-chip[aria-pressed="true"]{background:#ff5a1f;border-color:#ff5a1f;color:#171717}
+.v5-section-title{font-size:16px;font-weight:750;margin:12px 0;color:inherit}
+.v5-feature-note{font-size:12px;color:#aeb9cc;line-height:1.65}
+.v5-progress-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0}
+.v5-progress-kpi{background:#222e42;border-radius:10px;border:1px solid #3b4860;padding:12px}
+.v5-progress-kpi small{display:block;color:#9aaec5}.v5-progress-kpi strong{display:block;margin-top:6px;font-size:22px}
+.v5-page .v4-filters{padding-top:5px}
+.v5-page .v4-detail{margin-top:0!important}
+.v5-calendar-due{border-top:1px solid #354155;margin-top:12px;padding-top:12px}
+.v5-calendar-due .v5-due-row{font-size:12px;padding:7px 0;border-bottom:1px solid #303b4b}
+.v5-due-dot{outline:2px solid #f6b965;outline-offset:-3px}
+@media(max-width:680px){.v5-progress-grid{grid-template-columns:1fr 1fr}#v4-shell.v5-page{padding:12px}.v5-chip{padding:9px 11px}}
+</style>
+<script id="v5-navigation-app">
+(()=>{'use strict';
+ const MODE='POS',shell=document.getElementById('v4-shell');if(!shell)return;
+ const $=id=>document.getElementById(id);
+ const storageKey='knt_lms_portfolio_demo_v1';
+ shell.classList.add('v5-page');
+ const contentRoot=MODE==='OMS'?document.querySelector('.wrap'):document.querySelector('main.main');
+ if(!contentRoot)return;
+ contentRoot.appendChild(shell);
+ // Screen sections: Calendar has calendar and daily records; Insights has reports and management.
+ const filter=$('v4-shell').querySelector('.v4-filters');
+ const metric=$('v4-metrics'), flex=$('v4-shell').querySelector('.v4-flex'),detail=$('v4-shell').querySelector('.v4-detail');
+ if(filter)filter.classList.add('v5-common-filter');
+ const calendar=document.createElement('section');calendar.id='v5-calendar-screen';calendar.className='v5-section';
+ const insights=document.createElement('section');insights.id='v5-insights-screen';insights.className='v5-section';
+ calendar.append(flex);insights.append(detail);
+ shell.insertBefore(calendar,detail.nextSibling);
+ shell.insertBefore(insights,calendar.nextSibling);
+ const nav=document.querySelector('nav.nav');
+ const header=contentRoot.querySelector('header');
+ let buttons=[];
+ if(nav){
+   for(const [key,icon,label] of [['calendar','▦','Calendar'],['insights','◈','Insights & Reports']]){
+     const b=document.createElement('button');b.type='button';b.className='v5-link';b.textContent=icon+'  '+label;b.dataset.v5=key;nav.append(b);buttons.push(b);
+   }
+ } else {
+   const bar=document.createElement('nav');bar.className='v5-screenbar';bar.setAttribute('aria-label','OMS sections');
+   for(const [key,label] of [['orders','Orders'],['calendar','Calendar'],['insights','Insights & Reports']]){
+     const b=document.createElement('button');b.type='button';b.className='v5-chip';b.dataset.v5=key;b.textContent=label;bar.append(b);buttons.push(b)
+   }
+   (header||contentRoot.firstElementChild).after(bar);
+ }
+ const heading=MODE==='POS'?$('pageTitle'):MODE==='CRM'?$('pageTitle'):MODE==='LMS'?$('heading'):null;
+ const subtitle=MODE==='POS'?$('pageSubtitle'):MODE==='CRM'?$('pageSub'):MODE==='LMS'?$('subtitle'):null;
+ const originalHeader={heading:heading?.textContent||'',sub:subtitle?.textContent||''};
+ const originals=MODE==='CRM'?['overview','customers','paid','search']:
+  MODE==='POS'?['page-pos','page-dashboard','page-inventory','page-history']:
+  MODE==='LMS'?['dashboard','students','courses','attendance','assignments','results']:[];
+ // For OMS, hide its original dashboard/cards on the custom analytics screens; keep original in place.
+ const omsElements=MODE==='OMS'?[...contentRoot.children].filter(n=>n!==shell&&n.tagName==='SECTION'&&!n.classList.contains('v5-section')):[];
+ function hideNative(on){
+   if(MODE==='OMS')omsElements.forEach(n=>on?n.style.setProperty('display','none','important'):n.style.removeProperty('display'));
+   else for(const id of originals){const el=$(id);if(!el)continue;if(on)el.style.setProperty('display','none','important');else el.style.removeProperty('display')}
+   const reset=MODE==='CRM'||MODE==='LMS'?contentRoot.querySelector('.resetrow'):null;
+   if(reset)on?reset.style.setProperty('display','none','important'):reset.style.removeProperty('display');
+ }
+ function openScreen(screen){
+   const active=screen==='calendar'||screen==='insights';
+   hideNative(active);shell.classList.toggle('v5-open',active);
+   calendar.hidden=screen!=='calendar';insights.hidden=screen!=='insights';
+   // Common filters & metrics appear in both calendar and insights.
+   for(const b of buttons){b.classList.toggle('active',b.dataset.v5===screen);b.setAttribute('aria-pressed',String(b.dataset.v5===screen))}
+   if(nav&&active){nav.querySelectorAll('[data-page],[data-view]').forEach(b=>b.classList.remove('active'))}
+   if(heading&&active)heading.textContent=(MODE==='CRM'?'CRM':MODE==='POS'?'POS':'LMS')+' · '+(screen==='calendar'?'Calendar':'Insights & Reports');
+   if(subtitle&&active)subtitle.textContent=screen==='calendar'?'Select a day to view activity and filter records':'Trends, performance, operational tools and reports';
+   if(!active&&MODE==='OMS'){buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v5==='orders')))}
+   if(active&&MODE==='LMS')refreshLms();
+ }
+ buttons.forEach(b=>b.addEventListener('click',()=>openScreen(b.dataset.v5)));
+ if(nav)nav.querySelectorAll('[data-page],[data-view]').forEach(b=>b.addEventListener('click',()=>{
+   shell.classList.remove('v5-open');calendar.hidden=true;insights.hidden=true;
+   hideNative(false);buttons.forEach(x=>{x.classList.remove('active');x.setAttribute('aria-pressed','false')});
+ }));
+ // Original section title and actions are retained; change outdated name.
+ const t=$('v4-shell').querySelector('.v4-title');if(t)t.textContent='Premium V5 · '+MODE+' Workspace';
+ const top=shell.querySelector('.v4-top'); if(top){const p=document.createElement('p');p.className='v5-feature-note';p.textContent='Choose Calendar for date-by-date records, or Insights & Reports for performance and management tools.';top.after(p)}
+ const insightTitle=document.createElement('h3');insightTitle.className='v5-section-title';insightTitle.textContent='Operational insights & management';insights.prepend(insightTitle);
+ // LMS-specific improvements: student-wise reports and assignment-due calendar, based on stored records.
+ let studentChoice='';
+ if(MODE==='LMS'){
+   const progress=document.createElement('div');progress.className='v4-card';progress.style.marginBottom='16px';progress.innerHTML=`<h3 style="margin:0 0 10px">Student Progress Report</h3><label class="v4-note">Student <select id="v5-student" class="v4-field" aria-label="Select a student for progress report"></select></label><div id="v5-progress"></div><p class="v5-feature-note">Attendance rate counts Present and Late as attended. Grades use recorded result scores only. Submission status is tracked separately from grades.</p>`;
+   insights.insertBefore(progress,detail);
+   const due=document.createElement('div');due.className='v5-calendar-due';due.innerHTML='<strong>Assignment deadlines in visible month</strong><div id="v5-due-list"></div>';
+   flex.firstElementChild?.append(due);
+   $('v5-student').addEventListener('change',e=>{studentChoice=e.target.value;refreshLms()});
+   const observer=new MutationObserver(()=>{refreshLms()});
+   observer.observe($('v4-month'),{childList:true});
+   $('v4-days').addEventListener('click',()=>queueMicrotask(refreshLms));
+   document.addEventListener('click',e=>{if(shell.contains(e.target))return;queueMicrotask(refreshLms)},false);
+   window.addEventListener('knt-v3-change',refreshLms);
+   window.addEventListener('storage',e=>{if(e.key===storageKey)refreshLms()});
+ }
+ const clean=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ function refreshLms(){
+   if(MODE!=='LMS')return;
+   let db;try{db=JSON.parse(localStorage.getItem(storageKey)||'null')}catch{}if(!db)return;
+   const students=Array.isArray(db.students)?db.students:[],courses=Array.isArray(db.courses)?db.courses:[],attendance=Array.isArray(db.attendance)?db.attendance:[],assignments=Array.isArray(db.assignments)?db.assignments:[],results=Array.isArray(db.results)?db.results:[];
+   const choices=$('v5-student');if(!choices)return;
+   if(!students.some(s=>String(s.id)===studentChoice))studentChoice=String(students[0]?.id??'');
+   choices.innerHTML=students.map(s=>`<option value="${clean(s.id)}">${clean(s.name)}</option>`).join('');choices.value=studentChoice;
+   const student=students.find(s=>String(s.id)===studentChoice);
+   const progress=$('v5-progress');if(!student){progress.textContent='No students yet.';return}
+   const a=attendance.filter(x=>String(x.studentId)===studentChoice);
+   const present=a.filter(x=>x.status==='Present'||x.status==='Late').length;
+   const rate=a.length?Math.round(present*100/a.length):0;
+   const courseAssign=assignments.filter(x=>String(x.courseId)===String(student.courseId));
+   const graded=results.filter(r=>String(r.studentId)===studentChoice&&courseAssign.some(x=>String(x.id)===String(r.assignmentId)));
+   let avg=graded.length?Math.round(graded.reduce((acc,r)=>{const as=courseAssign.find(x=>String(x.id)===String(r.assignmentId));return acc+(as?.max?Number(r.score)*100/Number(as.max):0)},0)/graded.length):null;
+   let meta={};try{meta=JSON.parse(localStorage.getItem('knt_v4_extra_LMS')||'{}')}catch{}
+   const submissions=meta.submissions||{};
+   const submitted=courseAssign.filter(x=>['Submitted','Reviewed'].includes(submissions[studentChoice+':'+x.id])).length;
+   const missingGrade=courseAssign.filter(x=>!graded.some(r=>String(r.assignmentId)===String(x.id))).length;
+   const course=courses.find(x=>String(x.id)===String(student.courseId));
+   progress.innerHTML=`<p class="v5-feature-note">${clean(student.name)} · ${clean(course?.name||'Unknown course')}</p><div class="v5-progress-grid"><div class="v5-progress-kpi"><small>Attendance</small><strong>${a.length?rate+'%':'—'}</strong></div><div class="v5-progress-kpi"><small>Average grade</small><strong>${avg===null?'—':avg+'%'}</strong></div><div class="v5-progress-kpi"><small>Graded assignments</small><strong>${graded.length}/${courseAssign.length}</strong></div><div class="v5-progress-kpi"><small>Tracked submissions</small><strong>${submitted}</strong></div><div class="v5-progress-kpi"><small>Ungraded assignments</small><strong>${missingGrade}</strong></div><div class="v5-progress-kpi"><small>Attendance entries</small><strong>${a.length}</strong></div></div><p class="v5-feature-note">${missingGrade} ungraded assignment(s) ≠ ${missingGrade} missing submissions. No missing-submission claim is made without recorded submission status.</p>`;
+   // Enhance calendar markers with due dates (keeps original attendance calendar functional).
+   const label=$('v4-month')?.textContent||'';const view=new Date(label+' 1');if(isNaN(view))return;
+   const prefix=view.getFullYear()+'-'+String(view.getMonth()+1).padStart(2,'0');
+   const due=assignments.filter(a=>String(a.due||'').startsWith(prefix)).sort((a,b)=>String(a.due).localeCompare(String(b.due)));
+   const dueList=$('v5-due-list');if(dueList)dueList.innerHTML=due.length?due.map(a=>`<div class="v5-due-row">${clean(a.due)} · <strong>${clean(a.title)}</strong><div class="v5-feature-note">${clean(courses.find(c=>String(c.id)===String(a.courseId))?.name||'Course')}</div></div>`).join(''):'<p class="v5-feature-note">No assignment deadlines this month.</p>';
+   $('v4-days')?.querySelectorAll('[data-date]').forEach(btn=>{
+     const n=due.filter(a=>a.due===btn.dataset.date).length;btn.classList.toggle('v5-due-dot',n>0);if(n)btn.title=n+' assignment deadline(s)';
+   });
+ }
+ // Add more useful explanation of metrics and simulated-only scope.
+ const note=document.createElement('p');note.className='v5-feature-note';note.textContent='Portfolio demonstration only. Records are stored in your browser, not shared between devices. No real payments, school accounts or production authentication.';insights.append(note);
+ openScreen('');
+ if(MODE==='LMS')refreshLms();
+})();
+</script>
 </body>
 </html>
