@@ -104,7 +104,26 @@ const money=n=>new Intl.NumberFormat('en-US',{maximumFractionDigits:0}).format(M
 const fmtDate=iso=>new Date(iso).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'});
 const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const seedProducts=()=>SEED.map((p,i)=>({id:i+1,category:p[0],name:p[1],price:p[2],stock:p[3],emoji:p[4],barcode:String(89000000+i+1)}));
-const initialState=()=>({products:seedProducts(),sales:[],nextSale:1});
+function seedSampleSales(prods){
+  const now=new Date();
+  const daysAgo=(d,h=14)=>{const dt=new Date(now.getFullYear(),now.getMonth(),now.getDate()-d,h,20);return dt.toISOString();};
+  const samples=[
+    [0, 'Cash', [[0,2],[10,1],[20,2]]],
+    [0, 'Mobile Payment', [[6,2],[12,1]]],
+    [1, 'Cash', [[40,1],[41,1],[5,2]]],
+    [2, 'Card (Demo)', [[30,1],[32,1],[13,2]]],
+    [4, 'Mobile Payment', [[1,3],[11,2],[22,1]]],
+    [6, 'Cash', [[44,2],[48,1],[3,2]]],
+    [10, 'Cash', [[2,2],[14,1],[34,2]]],
+    [14, 'Mobile Payment', [[42,1],[45,1],[21,3]]]
+  ];
+  return samples.map((row,idx)=>{
+    const items=row[2].map(([pi,qty])=>{const p=prods[pi];return{id:p.id,name:p.name,category:p.category,qty,price:p.price};});
+    const subtotal=items.reduce((a,i)=>a+i.qty*i.price,0);
+    return{id:'KNT-'+String(idx+1).padStart(5,'0'),date:daysAgo(row[0],11+(idx%6)),items,subtotal,discount:0,total:subtotal,method:row[1],received:subtotal,change:0};
+  });
+}
+const initialState=()=>{const prods=seedProducts();const sales=seedSampleSales(prods);return{products:prods,sales,nextSale:sales.length+1};};
 function load(){try{let s=JSON.parse(localStorage.getItem(KEY));if(s&&Array.isArray(s.products)&&s.products.length>0&&Array.isArray(s.sales)&&Number.isInteger(s.nextSale))return s;}catch(e){}return initialState()}
 let state=load(),cart={},activeCat='All',activePage='pos',activeReceipt=null;
 const $=id=>document.getElementById(id);
@@ -320,8 +339,9 @@ el('v3-range').addEventListener('change',render);window.addEventListener('storag
 .v4-data-row{display:flex;justify-content:space-between;gap:14px;font-size:13px;margin:8px 0}
 .v4-note{font-size:12px;color:var(--muted);line-height:1.6}
 .v4-detail{display:grid;grid-template-columns:1.15fr 0.85fr;gap:16px}
-.v4-form-grid{display:grid;grid-template-columns:1fr 110px auto;gap:8px;align-items:end;margin:12px 0}
-.v4-form-grid label{display:grid;gap:5px;font-size:11px;color:var(--muted)}
+.v4-form-grid{display:grid;grid-template-columns:minmax(0,1fr) 95px auto;gap:8px;align-items:end;margin:12px 0}
+.v4-form-grid label{display:grid;gap:5px;font-size:11px;color:var(--muted);min-width:0}
+.v4-form-grid select,.v4-form-grid input{width:100%;min-width:0}
 @media(max-width:960px){.v4-flex,.v4-detail{grid-template-columns:1fr}.v4-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:540px){.v4-day{height:44px}.v4-metric strong{font-size:19px}.v4-form-grid{grid-template-columns:1fr}}
 @media print{body>*:not(.v4-print){visibility:hidden}.v4-shell{box-shadow:none;border:0;color:#111;background:white}.v4-actions,.v4-filters,.v4-tabs{display:none!important}}
@@ -361,7 +381,7 @@ function metrics(rows){let s=state(),sum=rows.reduce((n,x)=>n+x.amount,0),count=
  if(MODE==='OMS'){let del=rows.filter(x=>x.status==='Delivered');return[['Orders',count],['Delivered',del.length],['Delivery rate',count?(del.length/count*100).toFixed(1)+'%':'0%'],['Delivered order value',money(sum)]]}
  let ok=rows.filter(x=>['Present','Late'].includes(x.status));return[['Attendance entries',count],['Present / Late',ok.length],['Attendance rate',count?(ok.length/count*100).toFixed(1)+'%':'0%'],['Absent / Excused',count-ok.length]];
 }
-function renderCalendar(){let yy=cal.getFullYear(),mm=cal.getMonth(),first=new Date(yy,mm,1).getDay(),days=new Date(yy,mm+1,0).getDate();$('v4-month').textContent=cal.toLocaleDateString('en-US',{month:'long',year:'numeric'});let counts={};norm().forEach(x=>{if(x.date)counts[x.date]=(counts[x.date]||0)+1});let out='';for(let i=0;i<first;i++)out+='<span class="v4-day blank"></span>';for(let i=1;i<=days;i++){let d=iso(new Date(yy,mm,i));out+=`<button type="button" data-date="${d}" class="v4-day ${d===selected?'selected':''} ${d===today?'today':''}" aria-label="${d}: ${counts[d]||0} records"><span>${i}</span>${counts[d]?'<i></i>':''}</button>`}$('v4-days').innerHTML=out}
+function renderCalendar(){let yy=cal.getFullYear(),mm=cal.getMonth(),first=new Date(yy,mm,1).getDay(),days=new Date(yy,mm+1,0).getDate();$('v4-month').textContent=cal.toLocaleDateString('en-US',{month:'long',year:'numeric'});let counts={};norm().forEach(x=>{if(x.date)counts[x.date]=(counts[x.date]||0)+1});let out='';for(let i=0;i<first;i++)out+='<span class="v4-day blank"></span>';for(let i=1;i<=days;i++){let d=iso(new Date(yy,mm,i));out+=`<button type="button" data-date="${d}" class="v4-day ${d===selected?'selected':''} ${d===today?'today':''}" aria-label="${d}: ${counts[d]||0} records"><span>${i}</span>${counts[d]?`<small style="font-size:9px;color:var(--accent);font-weight:700">${counts[d]}</small>`:''}</button>`}$('v4-days').innerHTML=out}
 function bars(rows){let counts={};rows.forEach(r=>counts[r.kind]=(counts[r.kind]||0)+1);let list=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,6);let max=list[0]?.[1]||1;return list.map(([k,n])=>`<div style="margin:9px 0"><div class="v4-data-row"><span>${safe(k)}</span><b>${n}</b></div><div class="v4-bar"><div style="width:${Math.max(2,100*n/max)}%"></div></div></div>`).join('')||'<p class="v4-note">No records in this date range. Choose All records for historical sample data.</p>'}
 function report(){let rows=filtered(),sum=rows.reduce((n,x)=>n+x.amount,0);$('v4-metrics').innerHTML=metrics(rows).map(([a,b])=>card(a,b)).join('');$('v4-heading').textContent=selected?'Activity on '+selected:'Filtered activity';$('v4-count').textContent=rows.length+' records';$('v4-bars').innerHTML=bars(rows);$('v4-records').innerHTML=rows.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60).map(x=>`<div class="v4-line"><b>${safe(x.title)}</b><small>${safe(x.date)} · ${safe(x.detail)}</small>${MODE!=='LMS'?`<small>${money(x.amount)}</small>`:''}</div>`).join('')||'<div class="v4-note">No records for this selection.</div>';renderCalendar();renderFeature();$('v4-audit').innerHTML=meta.audit.slice(0,20).map(a=>`<div class="v4-line">${safe(a.message)}<small>${safe(a.date.slice(0,19).replace('T',' '))}</small></div>`).join('')||'<p class="v4-note">No analytics edits yet.</p>'}
 function saveField(group,key,value,description){meta[group][key]=value;log(description);persist();report()}
@@ -373,7 +393,7 @@ function renderFeature(){let rows=filtered(),s=state();const root=$('v4-feature'
 }
 function outputCsv(){let rows=filtered(),head=['ID','Date','Name / Order','Details','Category / Status','Value MMK'];let body=rows.map(r=>[r.id,r.date,r.title,r.detail,r.kind,r.amount]);let esc=v=>{let s=String(v??'');if(/^[=+@\-\t\r]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"'};let csv='\ufeff'+[head,...body].map(r=>r.map(esc).join(',')).join('\r\n');let blob=new Blob([csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='khant-nyi-'+MODE.toLowerCase()+'-filtered.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),3000);log('Exported '+rows.length+' filtered records');persist();report()}
 function init(){const cats=[...new Set(norm().map(x=>x.kind))].sort();let old=$('v4-category').value;$('v4-category').innerHTML='<option value="">All categories / statuses</option>'+cats.map(x=>`<option value="${safe(x)}">${safe(x)}</option>`).join('');$('v4-category').value=old;report()}
-['v4-period','v4-from','v4-to','v4-category'].forEach(id=>$(id).addEventListener('change',()=>{if(['v4-from','v4-to'].includes(id))$('v4-period').value='custom';report()}));$('v4-clear').onclick=()=>{$('v4-period').value='all';$('v4-from').value='';$('v4-to').value='';$('v4-category').value='';selected='';report()};$('v4-prev').onclick=()=>{cal=new Date(cal.getFullYear(),cal.getMonth()-1,1);renderCalendar()};$('v4-next').onclick=()=>{cal=new Date(cal.getFullYear(),cal.getMonth()+1,1);renderCalendar()};$('v4-days').onclick=e=>{let b=e.target.closest('[data-date]');if(b){selected=selected===b.dataset.date?'':b.dataset.date;report()}};$('v4-print').onclick=()=>window.print();$('v4-csv').onclick=outputCsv;
+['v4-period','v4-from','v4-to','v4-category'].forEach(id=>$(id).addEventListener('change',()=>{if(['v4-from','v4-to'].includes(id))$('v4-period').value='custom';if(id!=='v4-category')selected='';report()}));$('v4-clear').onclick=()=>{$('v4-period').value='all';$('v4-from').value='';$('v4-to').value='';$('v4-category').value='';selected='';report()};$('v4-prev').onclick=()=>{cal=new Date(cal.getFullYear(),cal.getMonth()-1,1);renderCalendar()};$('v4-next').onclick=()=>{cal=new Date(cal.getFullYear(),cal.getMonth()+1,1);renderCalendar()};$('v4-days').onclick=e=>{let b=e.target.closest('[data-date]');if(b){selected=selected===b.dataset.date?'':b.dataset.date;report()}};$('v4-print').onclick=()=>window.print();$('v4-csv').onclick=outputCsv;
 shell.addEventListener('click',e=>{let id=e.target.id;
  if(id==='v4-save-extra'&&MODE==='CRM'){let x=$('v4-item').value,d=$('v4-extra-date').value,n=$('v4-extra-note').value.trim();if(!x||!d)return console.warn('Choose customer and follow-up date');saveField('notes',x,{date:d,note:n},'Set CRM follow-up for customer '+x);}
  if(id==='v4-save-cost'&&MODE==='POS'){let x=$('v4-item').value,c=Number($('v4-extra-cost').value);if(!x||!Number.isFinite(c)||c<0)return console.warn('Enter valid unit cost');saveField('costs',x,c,'Updated sample unit cost for product '+x);}
@@ -454,8 +474,8 @@ init();
    calendar.hidden=screen!=='calendar';insights.hidden=screen!=='insights';
    for(const b of buttons){b.classList.toggle('active',b.dataset.v5===screen);b.setAttribute('aria-pressed',String(b.dataset.v5===screen))}
    if(nav&&active){nav.querySelectorAll('[data-page],[data-view]').forEach(b=>b.classList.remove('active'))}
-   if(heading&&active)heading.textContent=(MODE==='CRM'?'CRM':MODE==='POS'?'POS':'LMS')+' · '+(screen==='calendar'?'Calendar':'Insights & Reports');
-   if(subtitle&&active)subtitle.textContent=screen==='calendar'?'Select a day to view activity and filter records':'Trends, performance, operational tools and reports';
+   const isMy=document.documentElement.lang==='my';if(heading&&active)heading.textContent=isMy?(screen==='calendar'?'ပြက္ခဒိန်နှင့် နေ့စဉ်အရောင်း':'သုံးသပ်ချက်နှင့် အစီရင်ခံစာ'):('POS · '+(screen==='calendar'?'Calendar':'Insights & Reports'));
+   if(subtitle&&active)subtitle.textContent=isMy?(screen==='calendar'?'တစ်ရက်ချင်း၊ တစ်ပတ်စာ၊ တစ်လစာ အရောင်းများကို ကြည့်ရှုနိုင်ပါသည်။':'အမြတ်အစွန်း၊ ကုန်ကျစရိတ်နှင့် အရောင်းသုံးသပ်ချက်များ။'):(screen==='calendar'?'Select a day or period to view sales activity':'Trends, performance, operational tools and reports');
    if(!active&&MODE==='OMS'){buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v5==='orders')))}
    if(active&&MODE==='LMS')refreshLms();
  }
